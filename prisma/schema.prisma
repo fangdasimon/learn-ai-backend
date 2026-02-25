@@ -1,0 +1,133 @@
+// 这是你的 Prisma Schema 文件
+// 了解更多信息: https://pris.ly/d/prisma-schema
+
+// 生成器配置: 使用 prisma-client (Prisma v7 默认生成器)
+// 开启 postgresqlExtensions 预览特性以支持 pgvector
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+// 数据源配置: 使用 PostgreSQL
+datasource db {
+  provider   = "postgresql"
+  // 注意: 在 Prisma v7 中，连接 URL 已从环境变量或 prisma.config.ts 加载
+  extensions = [vector]
+}
+
+// --- 数据模型定义 ---
+
+/**
+ * 用户模型 (User)
+ * 存储用户的基本信息和凭证
+ */
+model User {
+  id        Int       @id @default(autoincrement()) // 主键，自增 ID
+  email     String    @unique // 邮箱，必须唯一
+  password  String    // 密码 (加密存储)
+  deletedAt DateTime? // 软删除时间，null 表示未删除
+  createdAt DateTime  @default(now()) // 创建时间
+  updatedAt DateTime  @updatedAt // 更新时间
+  notes     Note[]    // 关联: 一个用户可以拥有多条笔记 (1:N)
+  conversations Conversation[] // 关联: 用户拥有的 AI 对话会话 (1:N)
+}
+
+/**
+ * 笔记模型 (Note)
+ * 核心业务数据，存储笔记标题和内容
+ */
+model Note {
+  id        Int       @id @default(autoincrement()) // 主键
+  title     String    // 标题
+  content   String    // 内容 (可以是 Markdown 或纯文本)
+  summary   String?   // AI 生成的笔记摘要
+  deletedAt DateTime? // 软删除时间，null 表示未删除
+  
+  // 关联用户 (多对一)
+  userId    Int       // 外键: 指向的用户 ID
+  user      User      @relation(fields: [userId], references: [id])
+  
+  // 关联标签 (多对多)
+  tags      Tag[]
+  
+  // 关联分片 (用于 RAG 搜索)
+  chunks    NoteChunk[]
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // 索引优化
+  // 1. 复合索引：优化特定用户的笔记分页查询 (按时间倒序)
+  @@index([userId, createdAt(sort: Desc)])
+  // 2. 搜索索引：优化标题搜索性能
+  @@index([title])
+}
+
+/**
+ * 标签模型 (Tag)
+ * 用于对笔记进行分类
+ */
+model Tag {
+  id    Int    @id @default(autoincrement())
+  name  String @unique // 标签名，唯一
+  notes Note[] // 关联: 一个标签可以被多条笔记使用 (N:N)
+}
+
+/**
+ * 笔记分片模型 (NoteChunk)
+ * 用于 RAG (检索增强生成)
+ * 存储笔记的长文本切片及其对应的向量数据
+ */
+model NoteChunk {
+  id        String   @id @default(uuid())
+  content   String   // 切片文本内容
+  
+  // 向量字段: 存储 1024 维的向量 (适配 bge-large-zh 模型)
+  // 使用 Unsupported 类型，因为 Prisma 暂未原生支持 vector 类型，需配合 pgvector 扩展
+  embedding Unsupported("vector(1024)")?
+
+  // 关联笔记 (一对多: 一篇笔记对应多个切片)
+  noteId    Int
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([noteId])
+}
+
+/**
+ * 对话会话模型 (Conversation)
+ * 用于管理多轮 AI 对话，提供服务端存储的“记忆”基础
+ */
+model Conversation {
+  id        Int           @id @default(autoincrement())
+  title     String        // 会话标题 (通常由第一轮提问生成)
+  userId    Int           // 所属用户
+  user      User          @relation(fields: [userId], references: [id])
+  messages  ChatMessage[] // 会话下的所有消息记录 (1:N)
+  
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // 索引优化：快速按时间倒序查询用户的会话列表
+  @@index([userId, updatedAt(sort: Desc)])
+}
+
+/**
+ * 对话消息模型 (ChatMessage)
+ * 存储具体的问答历史，用于构建 AI 上下文
+ */
+model ChatMessage {
+  id             Int          @id @default(autoincrement())
+  role           String       // 角色: user (用户) 或 assistant (助手)
+  content        String       // 消息文本内容
+  
+  conversationId Int          // 所属会话 ID
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime      @default(now())
+
+  // 索引优化：按时间顺序加载会话上下文
+  @@index([conversationId, createdAt])
+}
