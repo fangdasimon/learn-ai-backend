@@ -1,0 +1,42 @@
+# --- GitHub Actions: 自动化部署 (CD) 工作流 ---
+# 目标：当 CI 校验通过后，自动通过 SSH 登录腾讯云服务器并拉取、重启服务
+name: CD-Deploy-To-TencentCloud
+
+on:
+  # 当 CI 工作流成功完成后触发 (需配置 workflow_run)
+  # 或者简单起见，直接在推送至 main 时并行运行
+  push:
+    branches: [ "main" ]
+
+# 设置部署任务
+jobs:
+  deploy:
+    name: 自动化部署到腾讯云 Lighthouse
+    runs-on: ubuntu-latest
+    # 建议在使用 SSH Key 环境变量时配置 Environment 保护
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # 使用成熟的 SSH Action 操作服务器
+      - name: 执行远程 SSH 部署逻辑
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}     # 服务器公网 IP
+          username: ${{ secrets.SERVER_USER }} # 通常为 root
+          key: ${{ secrets.SERVER_SSH_KEY }}   # 私钥 (SSH Private Key)
+          port: 22                             # SSH 端口
+          script: |
+            # 1. 进入项目目录 (请确保服务器上已预先 git clone 项目)
+            cd /www/wwwroot/learn-ai-backend/smart-note-api
+            
+            # 2. 拉取最新代码
+            git pull origin main
+            
+            # 3. 运行 Docker Compose 重建镜像并启动
+            # --build 会根据最新的 Dockerfile 重新打包镜像
+            docker-compose up -d --build
+            
+            # 4. 清理残留的虚悬镜像 (保持磁盘整洁)
+            docker image prune -f
