@@ -73,7 +73,7 @@ set -e
 
 echo ""
 echo "[INFO] 进入项目目录..."
-cd ${PROJECT_DIR}/smart-note-api
+cd ${PROJECT_DIR}
 
 echo "[INFO] 拉取最新代码..."
 git pull origin main
