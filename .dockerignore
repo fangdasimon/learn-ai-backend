@@ -1,11 +1,9 @@
 # 忽略本地 node_modules，容器会自行安装
 node_modules
-# 忽略构建产物
-dist
 # 忽略环境变量文件 (容器内通过 docker-compose 或平台设置提供)
 .env
 # 忽略本地数据库文件
-data
+data`
 # 忽略日志
 npm-debug.log*
 yarn-debug.log*

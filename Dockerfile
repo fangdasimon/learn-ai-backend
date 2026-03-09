@@ -55,4 +55,4 @@ EXPOSE 3000
 
 # 启动命令：运行编译后的 entrypoint
 # 提示：实际生产环境建议通过 docker-compose 或 k8s 运行 prisma db push
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
