@@ -68,8 +68,11 @@ push_code() {
 remote_deploy() {
     info "连接服务器 ${SERVER_USER}@${SERVER_HOST} 执行部署..."
 
-    ssh "${SERVER_USER}@${SERVER_HOST}" bash -s <<REMOTE_SCRIPT
+    ssh "${SERVER_USER}@${SERVER_HOST}" bash --login -s <<REMOTE_SCRIPT
 set -e
+
+# 加载系统环境变量 (非交互式 SSH 默认不加载，会导致 git/docker 找不到)
+source /etc/profile 2>/dev/null || true
 
 echo ""
 echo "[INFO] 进入项目目录..."
