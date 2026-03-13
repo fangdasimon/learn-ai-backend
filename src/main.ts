@@ -14,6 +14,12 @@ async function bootstrap() {
   // 使用 NestFactory 创建应用实例，传入根模块 AppModule
   const app = await NestFactory.create(AppModule);
 
+  // --- CORS 配置 (允许前端跨域请求) ---
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    credentials: true,
+  });
+
   // --- 全局配置 ---
 
   // 1. 注册全局验证管道 (ValidationPipe)

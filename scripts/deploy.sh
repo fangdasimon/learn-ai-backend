@@ -75,8 +75,8 @@ set -e
 source /etc/profile 2>/dev/null || true
 
 echo ""
-echo "[INFO] 进入项目目录..."
-cd ${PROJECT_DIR}
+echo "[INFO] 进入 API 项目目录..."
+cd ${PROJECT_DIR}/smart-note-api
 
 echo "[INFO] 拉取最新代码..."
 git pull origin main
@@ -92,6 +92,7 @@ echo "[INFO] 部署完成！当前运行状态："
 docker compose ps
 
 echo ""
+echo "[INFO] 前端地址: http://\$(hostname -I | awk '{print \$1}')"
 echo "[INFO] API 地址: http://\$(hostname -I | awk '{print \$1}'):3000"
 echo "[INFO] Swagger:  http://\$(hostname -I | awk '{print \$1}'):3000/api-docs"
 REMOTE_SCRIPT

@@ -41,7 +41,7 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        name: 'TODO: Add Name', // 暂时占位，User 模型没有 name
+        name: user.name || user.email.split('@')[0],
       },
     };
   }

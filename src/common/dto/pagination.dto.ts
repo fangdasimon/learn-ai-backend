@@ -1,3 +1,5 @@
+import { Type } from 'class-transformer';
+
 /**
  * 分页请求参数 DTO
  * 用于标准化分页接口的输入
@@ -7,12 +9,14 @@ export class PageOptionsDto {
    * 当前页码
    * @default 1
    */
+  @Type(() => Number)
   page?: number = 1;
 
   /**
    * 每页条数
    * @default 10
    */
+  @Type(() => Number)
   limit?: number = 10;
 
   /**
@@ -56,8 +60,8 @@ export class PageDto<T> {
 
   constructor(data: T[], total: number, pageOptions: PageOptionsDto) {
     this.data = data;
-    const limit = pageOptions.limit || 10;
-    const page = pageOptions.page || 1;
+    const limit = Number(pageOptions.limit) || 10;
+    const page = Number(pageOptions.page) || 1;
 
     this.meta = {
       total,

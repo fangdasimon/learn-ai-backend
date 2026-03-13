@@ -45,6 +45,8 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 # 3. Prisma 定义文件 (用于容器启动时的数据库同步)
 COPY --from=builder /app/prisma ./prisma
+# 4. Prisma 配置文件 (Prisma v7 需要 prisma.config.ts)
+COPY --from=builder /app/prisma.config.ts ./
 
 # 设置环境变量默认值 (可在运行容器时重写)
 ENV NODE_ENV=production

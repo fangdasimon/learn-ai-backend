@@ -89,13 +89,16 @@ export class NotesService {
    */
   async findAll(userId: number, pageOptions: PageOptionsDto) {
     const {
-      page = 1,
-      limit = 10,
+      page: rawPage = 1,
+      limit: rawLimit = 10,
       orderBy = 'createdAt',
       order = 'desc',
       keyword,
     } = pageOptions;
 
+    // 确保分页参数为整数（query string 传入可能是字符串）
+    const page = Number(rawPage);
+    const limit = Number(rawLimit);
     const skip = (page - 1) * limit;
 
     // 强制限制 userId，确保用户只能看到自己的笔记
@@ -320,8 +323,8 @@ export class NotesService {
       content: m.content,
     }));
 
-    // 3. 将当前用户消息入库（异步执行不阻塞）
-    const userMessagePromise = this.prisma.chatMessage.create({
+    // 3. 将当前用户消息入库（先保存，确保 createdAt 早于 AI 回复）
+    await this.prisma.chatMessage.create({
       data: {
         role: 'user',
         content: question,
@@ -378,9 +381,11 @@ export class NotesService {
           where: { id: currentConversationId },
           data: { updatedAt: new Date() },
         }),
-        userMessagePromise, // 确保用户消息也已完成入库
       ]);
     }
+
+    // 8. 发送结束标记，通知前端流已完成
+    yield '[DONE]';
   }
 
   /**

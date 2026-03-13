@@ -26,6 +26,7 @@ model User {
   id        Int       @id @default(autoincrement()) // 主键，自增 ID
   email     String    @unique // 邮箱，必须唯一
   password  String    // 密码 (加密存储)
+  name      String?   // 用户名（可选）
   deletedAt DateTime? // 软删除时间，null 表示未删除
   createdAt DateTime  @default(now()) // 创建时间
   updatedAt DateTime  @updatedAt // 更新时间

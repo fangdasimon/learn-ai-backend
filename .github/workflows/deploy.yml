@@ -28,15 +28,12 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}   # 私钥 (SSH Private Key)
           port: 22                             # SSH 端口
           script: |
-            # 1. 进入项目目录 (请确保服务器上已预先 git clone 项目)
+            # 1. 进入 API 项目目录，拉取最新代码
             cd /www/wwwroot/learn-ai-backend/smart-note-api
-            
-            # 2. 拉取最新代码
             git pull origin main
-            
-            # 3. 运行 Docker Compose 重建镜像并启动
-            # --build 会根据最新的 Dockerfile 重新打包镜像
-            docker-compose up -d --build
-            
-            # 4. 清理残留的虚悬镜像 (保持磁盘整洁)
+
+            # 2. 在 smart-note-api 目录下重建并启动所有服务
+            docker compose up -d --build
+
+            # 3. 清理残留的虚悬镜像 (保持磁盘整洁)
             docker image prune -f

@@ -1,5 +1,7 @@
 # --- PostgreSQL + NestJS 应用编排配置 ---
-# 注意：新版本 Docker Compose 已建议移除 version 字段以避免解析干扰
+# name 确保无论在哪个目录执行，项目名和 volume 名都一致
+name: learn-ai-backend
+
 services:
   # --- 数据库服务 (PostgreSQL + pgvector) ---
   db:
