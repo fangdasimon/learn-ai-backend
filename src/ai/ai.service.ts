@@ -45,7 +45,21 @@ export class AiService {
             `Embedding 重试成功 (第 ${attempt} 次)，耗时: ${duration}ms`,
           );
         }
-        return response.data[0].embedding;
+        const embedding = response.data[0].embedding;
+
+        // 校验嵌入向量维度
+        if (!Array.isArray(embedding) || embedding.length !== 1024) {
+          throw new Error(
+            `嵌入维度不匹配: 期望 1024 维，实际 ${Array.isArray(embedding) ? embedding.length : 'N/A'}`,
+          );
+        }
+
+        // 校验向量值为有效浮点数
+        if (embedding.some((v) => typeof v !== 'number' || !isFinite(v))) {
+          throw new Error('嵌入向量包含无效浮点数');
+        }
+
+        return embedding;
       } catch (error: any) {
         lastError = error;
         const duration = Date.now() - startTime;
@@ -60,8 +74,11 @@ export class AiService {
           this.logger.warn(
             `Embedding 生成尝试失败 (第 ${attempt}/${maxRetries}), 耗时: ${duration}ms, 错误: ${error.message}. 正在重试...`,
           );
-          // 简单的指数退避 (500ms, 1000ms)
-          await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+          // 指数退避 + 抖动，上限 5 秒
+          const baseDelay = attempt * 500;
+          const jitter = Math.random() * 300;
+          const delay = Math.min(baseDelay + jitter, 5000);
+          await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
 
@@ -140,20 +157,29 @@ export class AiService {
       });
 
       const rawContent = response.choices[0]?.message?.content || '[]';
+      let tags: string[];
+
       // 解析 JSON 数组
       try {
         const parsed = JSON.parse(rawContent) as unknown;
         if (Array.isArray(parsed)) {
-          return parsed as string[];
+          tags = parsed.map(String);
+        } else if (typeof parsed === 'object' && parsed !== null) {
+          tags = Object.values(parsed).flat().map(String);
+        } else {
+          tags = [];
         }
-        if (typeof parsed === 'object' && parsed !== null) {
-          return Object.values(parsed).flat() as string[];
-        }
-        return [];
       } catch {
         // 兜底方案：正则提取或简单分割 (去除非法字符)
-        return rawContent.replace(/[[\]"]/g, '').split(/[,，]/);
+        tags = rawContent.replace(/[[\]"]/g, '').split(/[,，]/);
       }
+
+      // 校验标签名：只允许字母数字、中文、连字符、下划线，限制长度 50
+      return tags
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0 && t.length <= 50)
+        .filter((t) => /^[\w\u4e00-\u9fff\-]+$/u.test(t))
+        .slice(0, 10);
     } catch (error: any) {
       this.logger.error(
         `AI 标签推荐失败: ${error.message}`,

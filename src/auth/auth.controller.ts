@@ -1,11 +1,14 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service.js';
 import { CreateUserDto } from '../users/dto/create-user.dto.js';
 
 /**
  * 认证控制器
  * 提供登录和注册接口
+ * 限流：每分钟最多 10 次请求，防止暴力破解
  */
+@Throttle({ default: { limit: 10, ttl: 60000 } })
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}

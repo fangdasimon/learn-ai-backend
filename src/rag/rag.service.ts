@@ -76,25 +76,32 @@ export class RagService {
 
     // 2. 准备数据
     try {
+      // 批量生成嵌入（每批最多 10 个，并行请求）
+      const batchSize = 10;
+      const embeddings: number[][] = [];
+
+      for (let i = 0; i < textChunks.length; i += batchSize) {
+        const batch = textChunks.slice(i, i + batchSize);
+        const batchEmbeddings = await Promise.all(
+          batch.map((text) => this.aiService.generateEmbedding(text)),
+        );
+        embeddings.push(...batchEmbeddings);
+      }
+
       // 开启事务：删除旧数据并插入新数据
       await this.prisma.$transaction(async (tx) => {
         // 清理旧切片
         await tx.noteChunk.deleteMany({ where: { noteId } });
 
-        // 并行获取所有切片的 Embedding (注意：生产环境可能需要处理并发限制)
-        for (const chunkText of textChunks) {
-          const embedding = await this.aiService.generateEmbedding(chunkText);
-
-          // 注意：Prisma 暂不支持直接写入 vector 类型，需要使用原始 SQL 执行
+        for (let i = 0; i < textChunks.length; i++) {
           const chunkId = randomUUID();
-
           await tx.$executeRawUnsafe(
-            `INSERT INTO "NoteChunk" (id, content, "noteId", embedding) 
+            `INSERT INTO "NoteChunk" (id, content, "noteId", embedding)
              VALUES ($1, $2, $3, $4::vector)`,
             chunkId,
-            chunkText,
+            textChunks[i],
             noteId,
-            `[${embedding.join(',')}]`,
+            `[${embeddings[i].join(',')}]`,
           );
         }
       });

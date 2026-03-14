@@ -35,6 +35,13 @@ export class PageOptionsDto {
    * 搜索关键词 (可选)
    */
   keyword?: string;
+
+  /**
+   * 游标 ID（笔记 ID），传入后使用游标分页，性能优于深页 offset
+   * 返回该游标之后的 limit 条数据
+   */
+  @Type(() => Number)
+  cursor?: number;
 }
 
 /**

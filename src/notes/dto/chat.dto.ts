@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsInt, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsInt,
+  IsOptional,
+  MaxLength,
+} from 'class-validator';
 
 /**
  * AI 对话请求 DTO
@@ -12,6 +18,7 @@ export class ChatDto {
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(5000, { message: '问题最长 5000 字符' })
   question: string;
 
   @ApiProperty({

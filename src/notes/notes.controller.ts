@@ -13,6 +13,7 @@ import {
   MessageEvent,
 } from '@nestjs/common';
 import { Observable, from, map } from 'rxjs';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -48,6 +49,7 @@ export class NotesController {
    * AI 生成并保存笔记摘要
    */
   @Post(':id/summary')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: 'AI 生成笔记摘要',
     description: '调用 AI 为指定笔记生成摘要并保存到数据库',
@@ -63,6 +65,7 @@ export class NotesController {
    * AI 推荐标签 (实时)
    */
   @Get('ai/recommend-tags')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: 'AI 推荐标签',
     description: '根据提供的文本内容，实时返回 AI 建议的标签列表',
@@ -77,6 +80,7 @@ export class NotesController {
    * @returns 润色后的文本
    */
   @Post('ai/polish')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: 'AI 内容润色',
     description: '对输入的文本进行优化排版和措辞润色',
@@ -110,6 +114,7 @@ export class NotesController {
    */
   @Post('chat')
   @Sse()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: '笔记知识库流式对话',
     description:

@@ -68,6 +68,8 @@ export class PrismaService
                 'findUnique',
                 'findUniqueOrThrow',
                 'count',
+                'aggregate',
+                'groupBy',
               ].includes(operation)
             ) {
               const queryArgs = (args || {}) as { where?: Record<string, any> };

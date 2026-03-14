@@ -72,13 +72,8 @@ export class NotesService {
       },
     });
 
-    // 4. 创建笔记成功后，异步触发向量同步 (用于 RAG)
-    // 使用 .catch 捕获异步错误，防止后台任务失败影响主流程，同时记录日志
-    void this.ragService
-      .syncNoteVectors(note.id, note.content)
-      .catch((err: Error) =>
-        this.logger.error(`创建笔记后自动同步向量失败: ${err.message}`),
-      );
+    // 4. 创建笔记成功后，异步触发向量同步 (用于 RAG)，失败自动重试一次
+    void this.syncVectorsWithRetry(note.id, note.content, '创建笔记');
 
     return note;
   }
@@ -94,12 +89,12 @@ export class NotesService {
       orderBy = 'createdAt',
       order = 'desc',
       keyword,
+      cursor,
     } = pageOptions;
 
     // 确保分页参数为整数（query string 传入可能是字符串）
     const page = Number(rawPage);
     const limit = Number(rawLimit);
-    const skip = (page - 1) * limit;
 
     // 强制限制 userId，确保用户只能看到自己的笔记
     const where: Prisma.NoteWhereInput = {
@@ -117,6 +112,15 @@ export class NotesService {
         },
       ];
     }
+
+    // 游标分页：传入 cursor(笔记 ID) 时，用 WHERE id < cursor 实现 O(1) 翻页
+    // 传统分页：不传 cursor 时使用 skip/take
+    if (cursor) {
+      // 默认按 id desc 排序，游标取 id < cursor 的记录
+      where.id = order === 'asc' ? { gt: Number(cursor) } : { lt: Number(cursor) };
+    }
+
+    const skip = cursor ? 0 : (page - 1) * limit;
 
     const [data, total] = await Promise.all([
       this.prisma.note.findMany({
@@ -176,14 +180,12 @@ export class NotesService {
         data: { title, content },
       });
 
-      // 异步触发向量同步，并捕获异常记录日志
-      void this.ragService
-        .syncNoteVectors(updatedNote.id, updatedNote.content)
-        .catch((err: Error) =>
-          this.logger.error(
-            `更新笔记(无标签)后自动同步向量失败: ${err.message}`,
-          ),
-        );
+      // 异步触发向量同步，失败自动重试一次
+      void this.syncVectorsWithRetry(
+        updatedNote.id,
+        updatedNote.content,
+        '更新笔记(无标签)',
+      );
       return updatedNote;
     }
 
@@ -219,12 +221,12 @@ export class NotesService {
       });
     });
 
-    // 4. 更新成功后，异步刷新向量数据
-    void this.ragService
-      .syncNoteVectors(updatedNote.id, updatedNote.content)
-      .catch((err: Error) =>
-        this.logger.error(`更新笔记(带标签)后自动同步向量失败: ${err.message}`),
-      );
+    // 4. 更新成功后，异步刷新向量数据，失败自动重试一次
+    void this.syncVectorsWithRetry(
+      updatedNote.id,
+      updatedNote.content,
+      '更新笔记(带标签)',
+    );
 
     return updatedNote;
   }
@@ -308,12 +310,13 @@ export class NotesService {
       currentConversationId = newConv.id;
     }
 
-    // 2. 加载历史上下文 (最近 10 条消息)
-    const historyMessages = await this.prisma.chatMessage.findMany({
+    // 2. 加载历史上下文 (最近 10 条消息，倒序取出后反转为正序)
+    const historyMessagesDesc = await this.prisma.chatMessage.findMany({
       where: { conversationId: currentConversationId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: 10,
     });
+    const historyMessages = historyMessagesDesc.reverse();
 
     const history: {
       role: 'user' | 'assistant' | 'system';
@@ -356,15 +359,34 @@ export class NotesService {
 
     // 6. 调用 AI 流式输出并聚合结果用于存盘
     let fullResponse = '';
-    const stream = this.aiService.chatStreamWithContext(
-      question,
-      context,
-      history,
-    );
 
-    for await (const chunk of stream) {
-      fullResponse += chunk;
-      yield chunk;
+    try {
+      const stream = this.aiService.chatStreamWithContext(
+        question,
+        context,
+        history,
+      );
+
+      for await (const chunk of stream) {
+        fullResponse += chunk;
+        yield chunk;
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `流式对话异常: ${error.message}`,
+        error.stack,
+        'NotesService.chatStreamWithNotes',
+      );
+      // 向前端发送结构化错误 SSE 消息
+      const errorType = error.message?.includes('timeout')
+        ? 'AI_TIMEOUT'
+        : error.message?.includes('429')
+          ? 'AI_RATE_LIMIT'
+          : 'AI_ERROR';
+      yield JSON.stringify({
+        error: errorType,
+        message: '对话生成出错，请稍后重试',
+      });
     }
 
     // 7. 回复结束后，保存 AI 消息及更新会话活跃时间
@@ -414,6 +436,33 @@ export class NotesService {
       where: { conversationId: id },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /**
+   * 向量同步（带重试）
+   * 后台执行，失败后延迟 3 秒重试一次
+   */
+  private async syncVectorsWithRetry(
+    noteId: number,
+    content: string,
+    context: string,
+  ) {
+    try {
+      await this.ragService.syncNoteVectors(noteId, content);
+    } catch (err: any) {
+      this.logger.warn(
+        `${context}后向量同步首次失败: ${err.message}，3秒后重试...`,
+      );
+      try {
+        await new Promise((r) => setTimeout(r, 3000));
+        await this.ragService.syncNoteVectors(noteId, content);
+        this.logger.log(`${context}后向量同步重试成功: ID ${noteId}`);
+      } catch (retryErr: any) {
+        this.logger.error(
+          `${context}后向量同步重试仍失败: ${retryErr.message}`,
+        );
+      }
+    }
   }
 
   /**

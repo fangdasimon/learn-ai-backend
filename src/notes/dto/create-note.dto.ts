@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsArray,
   IsInt,
+  MaxLength,
 } from 'class-validator';
 
 /**
@@ -15,6 +16,7 @@ export class CreateNoteDto {
   @ApiProperty({ description: '笔记标题', example: '我的第一篇笔记' })
   @IsString({ message: '标题必须是字符串' })
   @IsNotEmpty({ message: '标题不能为空' })
+  @MaxLength(200, { message: '标题最长 200 字符' })
   title: string;
 
   @ApiProperty({
@@ -23,6 +25,7 @@ export class CreateNoteDto {
   })
   @IsString({ message: '内容必须是字符串' })
   @IsNotEmpty({ message: '内容不能为空' })
+  @MaxLength(50000, { message: '内容最长 50000 字符' })
   content: string;
 
   @ApiPropertyOptional({
